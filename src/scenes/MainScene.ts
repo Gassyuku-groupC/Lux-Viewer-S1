@@ -258,6 +258,8 @@ class MainScene extends Phaser.Scene {
     this.load.image('islandbase-night', `${base}/islandbase-night.svg`);
 
     this.load.image('worker-0', `${base}/sprites/worker0w.svg`);
+    this.load.image('worker-0-red', `${base}/sprites/worker0w-red.svg`);
+    this.load.image('worker-0-green', `${base}/sprites/worker0w-green.svg`);
     this.load.image('worker-0-outline', `${base}/sprites/worker0w-outline.svg`);
     this.load.image('worker-1', `${base}/sprites/worker1w.svg`);
     this.load.image('worker-1-outline', `${base}/sprites/worker1w-outline.svg`);
@@ -317,6 +319,16 @@ class MainScene extends Phaser.Scene {
         );
       }
     }
+    this.load.svg('city00-fuel', `${base}/sprites/cities/city00-fuel.svg`);
+    this.load.svg('city00-hub', `${base}/sprites/cities/city00-hub.svg`);
+    this.load.svg(
+      'city00night-fuel',
+      `${base}/sprites/cities/city00night-fuel.svg`
+    );
+    this.load.svg(
+      'city00night-hub',
+      `${base}/sprites/cities/city00night-hub.svg`
+    );
 
     this.load.image('coal', `${base}/sprites/coal.svg`);
     this.load.svg('uranium', `${base}/sprites/uranium.svg`);
@@ -910,6 +922,18 @@ class MainScene extends Phaser.Scene {
         this.onTileClicked(data.pos);
       }
       const { sprite } = this.unitSprites.get(id);
+
+      if (data.type === LUnit.Type.WORKER && data.team === LUnit.TEAM.A) {
+        let workerTexture = 'worker-0';
+        if (data.pos.x > 0 && data.pos.x < 2) {
+          workerTexture = 'worker-0-red';
+        } else if (data.pos.x > 2 && data.pos.x < 4) {
+          workerTexture = 'worker-0-green';
+        }
+        if (sprite.texture.key !== workerTexture) {
+          sprite.setTexture(workerTexture);
+        }
+      }
 
       sprite.setVisible(true);
       const p = mapPosToIsometricPixels(data.pos, {

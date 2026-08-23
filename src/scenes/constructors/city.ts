@@ -19,27 +19,43 @@ export const addCityTile = (
     width: scene.mapWidth,
     height: scene.mapHeight,
   });
-  let cityTileType = 'city' + data.team;
-
-  const s = seedrandom('' + data.pos.x * 10e3 + data.pos.y);
+  let cityTileType = '';
+  let cityTileNightType = '';
   let variant = '0';
-  const rngp = s();
-  if (rngp < 0.125) {
-    variant = '2';
-  } else if (rngp < 0.5) {
-    variant = '1';
-  } else if (rngp < 0.625) {
-    variant = '3';
-  }
-  cityTileType += variant;
-  // make tile transparent if there's a unit behind it and its a tall building (type 2 or 3)
-  if (
-    (variant === '2' || variant === '3') &&
-    tilesWithUnits.has(
-      hashMapCoords(new Position(data.pos.x - 1, data.pos.y - 1))
-    )
-  ) {
-    cityTileType += 't';
+
+  if (data.team === 0) {
+    if (data.pos.x > 0 && data.pos.x < 2) {
+      cityTileType = 'city00-hub';
+      cityTileNightType = 'city00night-hub';
+    } else if (data.pos.x > 2 && data.pos.x < 4) {
+      cityTileType = 'city00-fuel';
+      cityTileNightType = 'city00night-fuel';
+    } else {
+      cityTileType = 'city00';
+      cityTileNightType = 'city00night';
+    }
+  } else {
+    cityTileType = 'city' + data.team;
+    const s = seedrandom('' + data.pos.x * 10e3 + data.pos.y);
+    const rngp = s();
+    if (rngp < 0.125) {
+      variant = '2';
+    } else if (rngp < 0.5) {
+      variant = '1';
+    } else if (rngp < 0.625) {
+      variant = '3';
+    }
+    cityTileType += variant;
+    // make tile transparent if there's a unit behind it and its a tall building (type 2 or 3)
+    if (
+      (variant === '2' || variant === '3') &&
+      tilesWithUnits.has(
+        hashMapCoords(new Position(data.pos.x - 1, data.pos.y - 1))
+      )
+    ) {
+      cityTileType += 't';
+    }
+    cityTileNightType = cityTileType + 'night';
   }
 
   // handle determining alpha for night version
@@ -53,7 +69,7 @@ export const addCityTile = (
   let ny = img.y;
   let nx = img.x;
   const img_overlay = scene.add
-    .image(p[0], p[1], cityTileType + 'night')
+    .image(p[0], p[1], cityTileNightType)
     .setDepth(getDepthByPos(data.pos) + 1e-1)
     .setScale(scene.defaultScales.city * scene.overallScale)
     .setAlpha(startAlpha);
