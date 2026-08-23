@@ -1145,8 +1145,24 @@ class MainScene extends Phaser.Scene {
                 .split("'")[1];
               let fontsize = parseInt(strs[strs.length - 1]);
               if (isNaN(x) || isNaN(y) || isNaN(fontsize)) {
+                  console.log("=== DEBUG annotate text error ===");
+                  console.log("original:", strs);
+                  console.log("strs:", strs);
+                  console.log("x:", x);
+                  console.log("y:", y);
+                  console.log("last:", strs[strs.length - 1]);
+                  console.log("fontsize:", fontsize);
+                  console.log("================================");
                 return;
               }
+              console.log("\n\n\n\n\ncan read annotate txt\n");
+              console.log("original:", strs);
+              console.log("strs:", strs);
+              console.log("x:", x);
+              console.log("y:", y);
+              console.log("message:", message);
+              console.log("fontsize:", fontsize);
+
               const p = mapCoordsToIsometricPixels(x, y, {
                 scale: this.overallScale,
                 width: this.mapWidth,
