@@ -25,6 +25,7 @@ import {
 import { generateClouds } from './constructors/clouds';
 import { addCartSprite, addWorkerSprite } from './constructors/units';
 import { addCityTile } from './constructors/city';
+import { ROLE_COLORS } from '../roleColors';
 import { addResourceTile } from './constructors/resource';
 import { addNormalFloorTile } from './constructors/floors';
 
@@ -169,6 +170,14 @@ class MainScene extends Phaser.Scene {
 
   frames: Array<Frame> = [];
 
+  roleFrames: Map<number, any> = new Map();
+
+  roleColor(turn: number, kind: 'units' | 'cities', id: string): number {
+    const entries = this.roleFrames.get(turn)?.[kind] || [];
+    const entry = entries.find((value) => value.id === id);
+    return entry ? ROLE_COLORS[entry.role] : undefined;
+  }
+
   /** To allow dimensions to run a match */
   pseudomatch: any = {
     state: {},
@@ -258,8 +267,6 @@ class MainScene extends Phaser.Scene {
     this.load.image('islandbase-night', `${base}/islandbase-night.svg`);
 
     this.load.image('worker-0', `${base}/sprites/worker0w.svg`);
-    this.load.image('worker-0-red', `${base}/sprites/worker0w-red.svg`);
-    this.load.image('worker-0-green', `${base}/sprites/worker0w-green.svg`);
     this.load.image('worker-0-outline', `${base}/sprites/worker0w-outline.svg`);
     this.load.image('worker-1', `${base}/sprites/worker1w.svg`);
     this.load.image('worker-1-outline', `${base}/sprites/worker1w-outline.svg`);
@@ -319,17 +326,6 @@ class MainScene extends Phaser.Scene {
         );
       }
     }
-    this.load.svg('city00-fuel', `${base}/sprites/cities/city00-fuel.svg`);
-    this.load.svg('city00-hub', `${base}/sprites/cities/city00-hub.svg`);
-    this.load.svg(
-      'city00night-fuel',
-      `${base}/sprites/cities/city00night-fuel.svg`
-    );
-    this.load.svg(
-      'city00night-hub',
-      `${base}/sprites/cities/city00night-hub.svg`
-    );
-
     this.load.image('coal', `${base}/sprites/coal.svg`);
     this.load.svg('uranium', `${base}/sprites/uranium.svg`);
     this.load.image('coal-night', `${base}/sprites/coalnight.svg`);
@@ -476,6 +472,9 @@ class MainScene extends Phaser.Scene {
    * and generate all relevant frames
    */
   async loadReplayData(replayData: any): Promise<void> {
+    this.roleFrames = new Map(
+      (replayData.roleFrames || []).map((frame) => [Number(frame.turn), frame])
+    );
     this.pseudomatch.configs.seed = replayData.seed;
     this.pseudomatch.configs.mapType = replayData.mapType;
     this.pseudomatch.configs.width = replayData.width;
@@ -923,17 +922,8 @@ class MainScene extends Phaser.Scene {
       }
       const { sprite } = this.unitSprites.get(id);
 
-      if (data.type === LUnit.Type.WORKER && data.team === LUnit.TEAM.A) {
-        let workerTexture = 'worker-0';
-        if (data.pos.x > 0 && data.pos.x < 2) {
-          workerTexture = 'worker-0-red';
-        } else if (data.pos.x > 2 && data.pos.x < 4) {
-          workerTexture = 'worker-0-green';
-        }
-        if (sprite.texture.key !== workerTexture) {
-          sprite.setTexture(workerTexture);
-        }
-      }
+      const roleColor = this.roleColor(turn, 'units', id);
+      roleColor === undefined ? sprite.clearTint() : sprite.setTint(roleColor);
 
       sprite.setVisible(true);
       const p = mapPosToIsometricPixels(data.pos, {
@@ -990,6 +980,11 @@ class MainScene extends Phaser.Scene {
     this.graphics.fillStyle(0xe7ded1, 1);
     f.cityTileData.forEach((data) => {
       const [img, img_overlay] = addCityTile(this, data, tilesWithUnits, turn);
+      const roleColor = this.roleColor(turn, 'cities', data.cityid);
+      if (roleColor !== undefined) {
+        img.setTint(roleColor);
+        img_overlay.setTint(roleColor);
+      }
       this.currentRenderedFramesImgs.push(img);
       this.currentRenderedFramesImgs.push(img_overlay);
       const hash = hashMapCoords(data.pos);

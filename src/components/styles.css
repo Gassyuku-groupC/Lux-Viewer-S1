@@ -150,3 +150,50 @@
   font-weight: 500;
   width: 14rem;
 }
+
+.Game .role-legend {
+  position: absolute;
+  z-index: 20;
+  left: 4.5rem;
+  top: 1rem;
+  color: #f8fafc;
+  background: rgba(24, 32, 39, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
+}
+
+.Game .role-legend-toggle {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.8rem;
+  border: 0;
+  color: #f8fafc;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.Game .role-legend-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(11.5rem, auto));
+  gap: 0.4rem 0.9rem;
+  padding: 0 0.8rem 0.8rem;
+}
+
+.Game .role-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.Game .role-legend-swatch {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}

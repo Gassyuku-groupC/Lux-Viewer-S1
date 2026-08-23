@@ -25,6 +25,7 @@ import UploadSVG from '../icons/upload.svg';
 import { parseReplayData } from '../utils/replays';
 import clientConfigs from './configs.json';
 import WarningsPanel from './WarningsPanel';
+import { ROLE_COLORS, roleColorCSS } from '../roleColors';
 // import debug_replay from './replay.json';
 export type GameComponentProps = {
   // replayData?: any;
@@ -75,6 +76,7 @@ export const GameComponent = () => {
   };
   const [isReady, setReady] = useState(false);
   const [warningsPanelOpen, setWarningsPanelOpen] = useState(false);
+  const [roleLegendOpen, setRoleLegendOpen] = useState(true);
   const [selectedTileData, setTileData] = useState<FrameTileData>(null);
   const [trackedUnitID, setTrackedUnitID] = useState<string>(null);
   const [game, setGame] = useState<Phaser.Game>(null);
@@ -490,6 +492,31 @@ export const GameComponent = () => {
         </div>
         {isReady && (
           <div>
+            {replayData?.roleFrames?.length > 0 && (
+              <div className={`role-legend ${roleLegendOpen ? 'open' : 'closed'}`}>
+                <button
+                  type="button"
+                  className="role-legend-toggle"
+                  onClick={() => setRoleLegendOpen(!roleLegendOpen)}
+                  aria-expanded={roleLegendOpen}
+                >
+                  Roles {roleLegendOpen ? '−' : '+'}
+                </button>
+                {roleLegendOpen && (
+                  <div className="role-legend-items">
+                    {Object.entries(ROLE_COLORS).map(([role, color]) => (
+                      <div className="role-legend-item" key={role}>
+                        <span
+                          className="role-legend-swatch"
+                          style={{ backgroundColor: roleColorCSS(color) }}
+                        />
+                        <span>{role}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <Controller
               turn={turn}
               moveToTurn={moveToTurn}
