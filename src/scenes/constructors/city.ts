@@ -34,12 +34,6 @@ export const addCityTile = (
     if (roleTexture) {
       cityTileType = roleTexture;
       cityTileNightType = roleTexture.replace('city00-', 'city00night-');
-    } else if (data.pos.x > 0 && data.pos.x < 2) {
-      cityTileType = 'city00-hub';
-      cityTileNightType = 'city00night-hub';
-    } else if (data.pos.x > 2 && data.pos.x < 4) {
-      cityTileType = 'city00-fuel';
-      cityTileNightType = 'city00night-fuel';
     } else {
       cityTileType = 'city00';
       cityTileNightType = 'city00night';

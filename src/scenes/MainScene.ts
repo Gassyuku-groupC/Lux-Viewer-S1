@@ -337,8 +337,6 @@ class MainScene extends Phaser.Scene {
     for (const role of ['attacker', 'builder', 'firefighter', 'harvester']) {
       this.load.image(`worker-0-${role}`, `${base}/sprites/worker0w-${role}.svg`);
     }
-    this.load.image('worker-0-red', `${base}/sprites/worker0w-red.svg`);
-    this.load.image('worker-0-green', `${base}/sprites/worker0w-green.svg`);
     this.load.image('worker-0-outline', `${base}/sprites/worker0w-outline.svg`);
     this.load.image('worker-1', `${base}/sprites/worker1w.svg`);
     this.load.image('worker-1-outline', `${base}/sprites/worker1w-outline.svg`);
@@ -398,16 +396,6 @@ class MainScene extends Phaser.Scene {
         );
       }
     }
-    this.load.svg('city00-fuel', `${base}/sprites/cities/city00-fuel.svg`);
-    this.load.svg('city00-hub', `${base}/sprites/cities/city00-hub.svg`);
-    this.load.svg(
-      'city00night-fuel',
-      `${base}/sprites/cities/city00night-fuel.svg`
-    );
-    this.load.svg(
-      'city00night-hub',
-      `${base}/sprites/cities/city00night-hub.svg`
-    );
     const roleCityTextures = [
       'fuel',
       'fuelstation',
@@ -415,8 +403,18 @@ class MainScene extends Phaser.Scene {
       'reserach',
       'sacrificial',
     ];
+    // asset filenames are inconsistent: the day version of the fuelstation
+    // sprite is named "station" instead of "fuelstation" (night version is
+    // named "fuelstation" correctly)
+    const dayFileNameOverrides: { [role: string]: string } = {
+      fuelstation: 'station',
+    };
     for (const role of roleCityTextures) {
-      this.load.svg(`city00-${role}`, `${base}/sprites/cities/city00-${role}.svg`);
+      const dayFileName = dayFileNameOverrides[role] || role;
+      this.load.svg(
+        `city00-${role}`,
+        `${base}/sprites/cities/city00-${dayFileName}.svg`
+      );
       this.load.svg(`city00night-${role}`, `${base}/sprites/cities/city00night-${role}.svg`);
     }
 
@@ -1267,10 +1265,6 @@ class MainScene extends Phaser.Scene {
         let workerTexture = 'worker-0';
         if (data.role) {
           workerTexture = `worker-0-${data.role.toLowerCase()}`;
-        } else if (data.pos.x > 0 && data.pos.x < 2) {
-          workerTexture = 'worker-0-red';
-        } else if (data.pos.x > 2 && data.pos.x < 4) {
-          workerTexture = 'worker-0-green';
         }
         if (sprite.texture.key !== workerTexture) {
           sprite.setTexture(workerTexture);
