@@ -33,6 +33,19 @@ type CommandsArray = Array<{
   agentID: number;
 }>;
 
+export type RoleOverlayFrame = {
+  turn: number;
+  player: number;
+  units?: Array<{ id: string; role: string }>;
+  cities?: Array<{ id: string; role: string }>;
+};
+
+export type RoleOverlayData = {
+  schema?: string;
+  player?: number;
+  frames: RoleOverlayFrame[];
+};
+
 export interface Frame {
   // map from hashed position to resource data
   resourceData: Map<
@@ -48,6 +61,10 @@ export interface Frame {
   unitData: FrameUnitData;
   cityData: FrameCityData;
   cityTileData: FrameCityTileData;
+  roleData?: {
+    units: Map<string, string>;
+    cities: Map<string, string>;
+  };
   annotations: CommandsArray;
   errors: string[];
 }
@@ -76,6 +93,7 @@ export interface FrameSingleUnitData {
   cooldown: number;
   id: string;
   commands: Array<{ turn: number; actions: string[] }>;
+  role?: string;
 }
 
 export type FrameCityTileData = Array<FrameSingleCityTileData>;
@@ -86,6 +104,7 @@ export type FrameSingleCityTileData = {
   cityid: string;
   tileid: string;
   cooldown: number;
+  role?: string;
 };
 
 export type FrameCityData = Map<string, FrameSingleCityData>;
@@ -94,10 +113,12 @@ export type FrameSingleCityData = {
   fuel: number;
   team: LUnit.TEAM;
   upkeep: number;
+  role?: string;
 };
 
 export type GameCreationConfigs = {
   replayData: object;
+  roleData?: RoleOverlayData;
   handleTileClicked: HandleTileClicked;
   handleUnitTracked: (id: string) => void;
   zoom: number;
@@ -258,6 +279,9 @@ class MainScene extends Phaser.Scene {
     this.load.image('islandbase-night', `${base}/islandbase-night.svg`);
 
     this.load.image('worker-0', `${base}/sprites/worker0w.svg`);
+    for (const role of ['attacker', 'builder', 'firefighter', 'harvester']) {
+      this.load.image(`worker-0-${role}`, `${base}/sprites/worker0w-${role}.svg`);
+    }
     this.load.image('worker-0-red', `${base}/sprites/worker0w-red.svg`);
     this.load.image('worker-0-green', `${base}/sprites/worker0w-green.svg`);
     this.load.image('worker-0-outline', `${base}/sprites/worker0w-outline.svg`);
@@ -329,6 +353,17 @@ class MainScene extends Phaser.Scene {
       'city00night-hub',
       `${base}/sprites/cities/city00night-hub.svg`
     );
+    const roleCityTextures = [
+      'fuel',
+      'fuelstation',
+      'manufacturing',
+      'reserach',
+      'sacrificial',
+    ];
+    for (const role of roleCityTextures) {
+      this.load.svg(`city00-${role}`, `${base}/sprites/cities/city00-${role}.svg`);
+      this.load.svg(`city00night-${role}`, `${base}/sprites/cities/city00night-${role}.svg`);
+    }
 
     this.load.image('coal', `${base}/sprites/coal.svg`);
     this.load.svg('uranium', `${base}/sprites/uranium.svg`);
@@ -608,7 +643,11 @@ class MainScene extends Phaser.Scene {
    * Creates a snapshot of the game state
    * @param game
    */
-  createFrame(game: Game, annotations: CommandsArray): Frame {
+  createFrame(
+    game: Game,
+    annotations: CommandsArray,
+    roleData?: { units: Map<string, string>; cities: Map<string, string> }
+  ): Frame {
     const teamStates: FrameTeamStateData = {
       [LUnit.TEAM.A]: {
         workers: 0,
@@ -672,6 +711,7 @@ class MainScene extends Phaser.Scene {
         id: unit.id,
         pos: unit.pos,
         commands: actions ? actions : [],
+        role: roleData && roleData.units.get(unit.id),
       });
       // if (this.currentTurn === 10) {
       //   console.log(unitData);
@@ -687,6 +727,7 @@ class MainScene extends Phaser.Scene {
         fuel: city.fuel,
         team: city.team,
         upkeep: city.getLightUpkeep(),
+        role: roleData && roleData.cities.get(city.id),
       });
       city.citycells.forEach((cell) => {
         const ct = cell.citytile;
@@ -696,6 +737,7 @@ class MainScene extends Phaser.Scene {
           cityid: ct.cityid,
           tileid: ct.getTileID(),
           cooldown: ct.cooldown,
+          role: roleData && roleData.cities.get(city.id),
         });
       });
     });
@@ -726,6 +768,7 @@ class MainScene extends Phaser.Scene {
       unitData,
       cityData,
       cityTileData,
+      roleData,
       teamStates,
       annotations,
       roadLevels,
@@ -742,7 +785,10 @@ class MainScene extends Phaser.Scene {
   public currentSelectedTilePos: Position = null;
 
   create(configs: GameCreationConfigs) {
-    this.loadReplayData(configs.replayData);
+    this.loadReplayData({
+      ...(configs.replayData as object),
+      roleData: configs.roleData,
+    });
     this.handleTileClicked = configs.handleTileClicked;
     this.handleUnitTracked = configs.handleUnitTracked;
     this.events.emit('created');
@@ -925,7 +971,9 @@ class MainScene extends Phaser.Scene {
 
       if (data.type === LUnit.Type.WORKER && data.team === LUnit.TEAM.A) {
         let workerTexture = 'worker-0';
-        if (data.pos.x > 0 && data.pos.x < 2) {
+        if (data.role) {
+          workerTexture = `worker-0-${data.role.toLowerCase()}`;
+        } else if (data.pos.x > 0 && data.pos.x < 2) {
           workerTexture = 'worker-0-red';
         } else if (data.pos.x > 2 && data.pos.x < 4) {
           workerTexture = 'worker-0-green';
@@ -1249,10 +1297,8 @@ class MainScene extends Phaser.Scene {
       const state: LuxMatchState = this.pseudomatch.state;
       const game = state.game;
       // generate start of turn 0
-      const frame = this.createFrame(
-        this.pseudomatch.state.game,
-        lastAnnotations
-      );
+      const roleData = this.roleDataForTurn(replayData.roleData, this.currentTurn);
+      const frame = this.createFrame(this.pseudomatch.state.game, lastAnnotations, roleData);
       let stats: TurnStats = {
         citiesOwned: [0, 0],
         totalFuelGenerated: [
@@ -1412,6 +1458,19 @@ class MainScene extends Phaser.Scene {
       // this.frames.push(frame);
       this.currentTurn++;
     }
+  }
+
+  roleDataForTurn(roleOverlay: RoleOverlayData, turn: number) {
+    const units = new Map<string, string>();
+    const cities = new Map<string, string>();
+    const roleFrame = roleOverlay && roleOverlay.frames
+      ? roleOverlay.frames.find((frame) => frame.turn === turn)
+      : undefined;
+    if (roleFrame && (roleOverlay.player === undefined || roleFrame.player === roleOverlay.player)) {
+      (roleFrame.units || []).forEach((unit) => units.set(unit.id, unit.role));
+      (roleFrame.cities || []).forEach((city) => cities.set(city.id, city.role));
+    }
+    return { units, cities };
   }
 
   lastPointerPosition = null;

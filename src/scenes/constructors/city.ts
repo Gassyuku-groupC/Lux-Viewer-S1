@@ -24,7 +24,17 @@ export const addCityTile = (
   let variant = '0';
 
   if (data.team === 0) {
-    if (data.pos.x > 0 && data.pos.x < 2) {
+    const roleTexture = {
+      FuelDepot: 'city00-fuel',
+      FuelStation: 'city00-fuelstation',
+      ManufacturingPoint: 'city00-manufacturing',
+      ResearchStation: 'city00-reserach',
+      SacrificialDecay: 'city00-sacrificial',
+    }[data.role];
+    if (roleTexture) {
+      cityTileType = roleTexture;
+      cityTileNightType = roleTexture.replace('city00-', 'city00night-');
+    } else if (data.pos.x > 0 && data.pos.x < 2) {
       cityTileType = 'city00-hub';
       cityTileNightType = 'city00night-hub';
     } else if (data.pos.x > 2 && data.pos.x < 4) {

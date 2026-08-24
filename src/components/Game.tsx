@@ -1,6 +1,6 @@
 import 'phaser';
 import React, { KeyboardEvent, useEffect, useState, version } from 'react';
-import MainScene, { Frame, FrameTileData } from '../scenes/MainScene';
+import MainScene, { Frame, FrameTileData, RoleOverlayData } from '../scenes/MainScene';
 import { createGame } from '../game';
 import {
   Button,
@@ -44,6 +44,7 @@ const theme = createMuiTheme({
 export const GameComponent = () => {
   const [notifWindowOpen, setNotifWindowOpen] = useState(false);
   const [replayData, setReplayData] = useState(null);
+  const [roleData, setRoleData] = useState<RoleOverlayData>(null);
   const [notifMsg, setNotifMsg] = useState('');
   const [running, setRunning] = useState(false);
   const [useKaggleReplay, setUseKaggleReplay] = useState(true);
@@ -90,6 +91,7 @@ export const GameComponent = () => {
   const [currentFrame, setFrame] = useState<Frame>(null);
   const [uploading, setUploading] = useState(false);
   const fileInput = React.createRef<HTMLInputElement>();
+  const roleFileInput = React.createRef<HTMLInputElement>();
 
   // If the game changes, put a setup callback to set up controller configs
   useEffect(() => {
@@ -256,7 +258,7 @@ export const GameComponent = () => {
   };
 
   /** load game given json replay data */
-  const loadGame = (jsonReplayData: any) => {
+  const loadGame = (jsonReplayData: any, jsonRoleData: RoleOverlayData = roleData) => {
     let versionMisMatch = false;
     let versionvals = ['x', 'x'];
     setReplayVersion(jsonReplayData.version);
@@ -279,13 +281,37 @@ export const GameComponent = () => {
     }
     setReady(false);
     setReplayData(jsonReplayData);
+    setRoleData(jsonRoleData);
     const newgame = createGame({
       replayData: jsonReplayData,
+      roleData: jsonRoleData,
       handleTileClicked,
       handleUnitTracked,
       zoom,
     });
     setGame(newgame);
+  };
+
+  const handleRoleUpload = () => {
+    if (!roleFileInput.current.files.length) {
+      return;
+    }
+    roleFileInput.current.files[0]
+      .text()
+      .then(JSON.parse)
+      .then((data: RoleOverlayData) => {
+        if (!Array.isArray(data.frames)) {
+          throw new Error('Role JSON must contain a frames array');
+        }
+        setRoleData(data);
+        if (replayData) {
+          loadGame(replayData, data);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert(err);
+      });
   };
 
   /** handle uploaded files */
@@ -461,12 +487,27 @@ export const GameComponent = () => {
                 <img className="upload-icon-no-replay" src={UploadSVG} />
               </Button>
               <p></p>
+              <Button
+                className="upload-btn"
+                color="secondary"
+                variant="contained"
+                onClick={() => roleFileInput.current.click()}
+              >
+                <span className="upload-text">Upload role JSON</span>
+              </Button>
               <input
                 accept=".json, .luxr"
                 type="file"
                 style={{ display: 'none' }}
                 onChange={handleUpload}
                 ref={fileInput}
+              />
+              <input
+                accept=".json"
+                type="file"
+                style={{ display: 'none' }}
+                onChange={handleRoleUpload}
+                ref={roleFileInput}
               />
             </div>
           </div>
@@ -490,6 +531,21 @@ export const GameComponent = () => {
         </div>
         {isReady && (
           <div>
+            <Button
+              className="upload-btn"
+              color="secondary"
+              variant="contained"
+              onClick={() => roleFileInput.current.click()}
+            >
+              <span className="upload-text">Upload role JSON</span>
+            </Button>
+            <input
+              accept=".json"
+              type="file"
+              style={{ display: 'none' }}
+              onChange={handleRoleUpload}
+              ref={roleFileInput}
+            />
             <Controller
               turn={turn}
               moveToTurn={moveToTurn}
