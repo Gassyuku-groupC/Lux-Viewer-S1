@@ -1,4 +1,4 @@
-import { LuxMatchState } from '@lux-ai/2021-challenge/lib/es6/types';
+import { LuxMatchState, SerializedState } from '@lux-ai/2021-challenge/lib/es6/types';
 import { LuxDesignLogic } from '@lux-ai/2021-challenge/lib/es6/logic';
 import { Game } from '@lux-ai/2021-challenge/lib/es6/Game';
 import { Resource } from '@lux-ai/2021-challenge/lib/es6/Resource';
@@ -14,6 +14,7 @@ import {
   mapPosToIsometricPixels,
 } from './utils';
 import { Position } from '@lux-ai/2021-challenge/lib/es6/GameMap/position';
+import { GameMap } from '@lux-ai/2021-challenge/lib/es6/GameMap';
 import { GameObjects } from 'phaser';
 import seedrandom from 'seedrandom';
 import {
@@ -44,6 +45,60 @@ export type RoleOverlayData = {
   schema?: string;
   player?: number;
   frames: RoleOverlayFrame[];
+};
+
+/** A single unit entry within a role-only replay frame */
+export type RoleOnlyReplayUnit = {
+  id: string;
+  x: number;
+  y: number;
+  role: string;
+  desired_role?: string;
+  changed?: boolean;
+  cooldown?: number;
+  reason?: string;
+};
+
+/** A single city entry within a role-only replay frame */
+export type RoleOnlyReplayCity = {
+  id: string;
+  role: string;
+  reason?: string;
+  nights_of_fuel?: number;
+  abandon?: boolean;
+  tiles: Array<{ x: number; y: number }>;
+};
+
+export type RoleOnlyReplayFrame = {
+  turn: number;
+  player: number;
+  map_size?: number;
+  units: RoleOnlyReplayUnit[];
+  cities: RoleOnlyReplayCity[];
+};
+
+/**
+ * Standalone replay format (schema "lux-role-overlay/v1") that carries unit/city
+ * positions and roles directly, with no accompanying allCommands replay.
+ */
+export type RoleOnlyReplayData = {
+  schema: string;
+  seed?: number;
+  width: number;
+  height: number;
+  player?: number;
+  replay_file?: string;
+  frames: RoleOnlyReplayFrame[];
+};
+
+export const ROLE_ONLY_REPLAY_SCHEMA = 'lux-role-overlay/v1';
+
+export const isRoleOnlyReplayData = (data: any): data is RoleOnlyReplayData => {
+  return (
+    !!data &&
+    data.schema === ROLE_ONLY_REPLAY_SCHEMA &&
+    Array.isArray(data.frames)
+  );
 };
 
 export interface Frame {
@@ -117,7 +172,7 @@ export type FrameSingleCityData = {
 };
 
 export type GameCreationConfigs = {
-  replayData: object;
+  replayData: object | RoleOnlyReplayData;
   roleData?: RoleOverlayData;
   handleTileClicked: HandleTileClicked;
   handleUnitTracked: (id: string) => void;
@@ -640,6 +695,241 @@ class MainScene extends Phaser.Scene {
   }
 
   /**
+   * Load a standalone role-only replay (schema "lux-role-overlay/v1") into the game.
+   * This does not use allCommands / LuxDesignLogic.update at all; instead each turn's
+   * unit/city snapshot is injected directly via LuxDesignLogic.reset so the existing
+   * render/frame pipeline (renderFrame, createFrame, city/worker role textures) is
+   * reused unmodified.
+   */
+  async loadRoleOnlyReplayData(replayData: RoleOnlyReplayData): Promise<void> {
+    this.pseudomatch.configs.seed = replayData.seed;
+    this.pseudomatch.configs.mapType = GameMap.Types.EMPTY;
+    this.pseudomatch.configs.width = replayData.width;
+    this.pseudomatch.configs.height = replayData.height;
+
+    // use design to initialize an empty "fake game" (no resources, no cities, no units)
+    await LuxDesignLogic.initialize(this.pseudomatch);
+
+    this.luxgame = this.pseudomatch.state.game;
+    let width = this.luxgame.map.width;
+    let height = this.luxgame.map.height;
+    this.graphics = this.add.graphics({ x: 0, y: 0 });
+    this.mapWidth = width;
+    this.mapHeight = height;
+
+    for (let y = 0; y < height; y++) {
+      let row = this.luxgame.map.getRow(y);
+      row.forEach((cell) => {
+        const [img, img_overlay, roadOverlay] = addNormalFloorTile(
+          this,
+          cell.pos
+        );
+        this.floorImageTiles.set(
+          hashMapCoords(new Position(cell.pos.x, cell.pos.y)),
+          { source: img, overlay: img_overlay, roadOverlay }
+        );
+      });
+    }
+
+    // add handler for clicking tiles
+    this.input.on(
+      Phaser.Input.Events.POINTER_DOWN,
+      (d: { worldX: number; worldY: number }) => {
+        const pos = mapIsometricPixelsToPosition(d.worldX, d.worldY, {
+          scale: this.overallScale,
+          width: this.mapWidth,
+          height: this.mapHeight,
+        });
+        if (
+          pos.x < 0 ||
+          pos.y < 0 ||
+          pos.x >= this.mapWidth ||
+          pos.y >= this.mapHeight
+        ) {
+          // off map
+          this.onTileClicked(null);
+          this.toggleOutlineClickedTile(undefined);
+        } else {
+          this.onTileClicked(pos);
+          const imageTile = this.floorImageTiles.get(hashMapCoords(pos)).source;
+          // outline tile if it exists and we aren't tracking a unit
+          this.toggleOutlineClickedTile(imageTile);
+        }
+      }
+    );
+
+    // add handler for moving cursor around isometric map
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer) => {
+      let px = pointer.worldX;
+      let py = pointer.worldY;
+      const pos = mapIsometricPixelsToPosition(px, py, {
+        scale: this.overallScale,
+        width: this.mapWidth,
+        height: this.mapHeight,
+      });
+      if (
+        pos.x < 0 ||
+        pos.y < 0 ||
+        pos.x >= this.mapWidth ||
+        pos.y >= this.mapHeight
+      ) {
+        // out of map
+        if (
+          this.hoverImageTile &&
+          this.activeImageTile !== this.hoverImageTile
+        ) {
+          this.hoverImageTile.setY(this.originalHoverImageTileY);
+          this.hoverImageTile.setTexture('ground');
+        }
+        this.hoverImageTile = null;
+      } else {
+        const imageTile = this.floorImageTiles.get(hashMapCoords(pos)).source;
+        if (imageTile) {
+          if (this.hoverImageTile == null) {
+            this.originalHoverImageTileY = imageTile.y;
+            this.hoverImageTile = imageTile;
+            this.hoverImageTile.setTexture('ground-outline');
+          } else if (this.hoverImageTile !== imageTile) {
+            if (this.activeImageTile != this.hoverImageTile) {
+              this.hoverImageTile.setTexture('ground');
+            }
+            this.originalHoverImageTileY = imageTile.y;
+            this.hoverImageTile = imageTile;
+            this.hoverImageTile.setTexture('ground-outline');
+          }
+        } else {
+          if (this.hoverImageTile) {
+            this.hoverImageTile.setY(this.originalHoverImageTileY);
+            this.hoverImageTile.setTexture('ground');
+          }
+          this.hoverImageTile = null;
+        }
+      }
+    });
+
+    this.generateRoleOnlyGameFrames(replayData).then(() => {
+      this.renderFrame(0);
+      this.game.events.emit('setup');
+      this.cameras.main.centerOnX(0);
+      this.cameras.main.centerOnY(0);
+      this.moveCamera(0, 0);
+    });
+  }
+
+  /**
+   * Build an (empty) SerializedState snapshot for a given role-only replay frame and
+   * inject it via LuxDesignLogic.reset, bypassing command validation entirely since
+   * this format carries absolute positions/roles rather than actions.
+   */
+  private applyRoleOnlyFrame(frame: RoleOnlyReplayFrame, width: number, height: number) {
+    const mapRows: SerializedState['map'] = [];
+    for (let y = 0; y < height; y++) {
+      const row = [];
+      for (let x = 0; x < width; x++) {
+        row.push({ road: 0 });
+      }
+      mapRows.push(row);
+    }
+
+    const units: SerializedState['teamStates'][0]['units'] = {};
+    (frame.units || []).forEach((unit) => {
+      units[unit.id] = {
+        cargo: { wood: 0, coal: 0, uranium: 0 },
+        cooldown: unit.cooldown ?? 0,
+        x: unit.x,
+        y: unit.y,
+        type: LUnit.Type.WORKER,
+      };
+    });
+
+    const cities: SerializedState['cities'] = {};
+    (frame.cities || []).forEach((city) => {
+      cities[city.id] = {
+        id: city.id,
+        team: LUnit.TEAM.A,
+        fuel: 0,
+        cityCells: (city.tiles || []).map((tile) => ({
+          x: tile.x,
+          y: tile.y,
+          cooldown: 0,
+        })),
+      };
+    });
+
+    const emptyResearched = {
+      wood: true,
+      coal: false,
+      uranium: false,
+    };
+
+    const serializedState: SerializedState = {
+      turn: frame.turn,
+      globalCityIDCount: Object.keys(cities).length,
+      globalUnitIDCount: Object.keys(units).length,
+      teamStates: {
+        [LUnit.TEAM.A]: {
+          researchPoints: 0,
+          units,
+          researched: { ...emptyResearched },
+        },
+        [LUnit.TEAM.B]: {
+          researchPoints: 0,
+          units: {},
+          researched: { ...emptyResearched },
+        },
+      },
+      map: mapRows,
+      cities,
+    };
+
+    LuxDesignLogic.reset(this.pseudomatch, serializedState);
+  }
+
+  /**
+   * Generate frames directly from a role-only replay's per-turn unit/city snapshots.
+   */
+  async generateRoleOnlyGameFrames(replayData: RoleOnlyReplayData) {
+    const width = this.luxgame.map.width;
+    const height = this.luxgame.map.height;
+    const sortedFrames = [...replayData.frames].sort((a, b) => a.turn - b.turn);
+
+    for (const roleFrame of sortedFrames) {
+      this.applyRoleOnlyFrame(roleFrame, width, height);
+      const game = this.pseudomatch.state.game as Game;
+
+      const roleData = {
+        units: new Map<string, string>(),
+        cities: new Map<string, string>(),
+      };
+      (roleFrame.units || []).forEach((unit) => roleData.units.set(unit.id, unit.role));
+      (roleFrame.cities || []).forEach((city) => roleData.cities.set(city.id, city.role));
+
+      // spawn/update sprites for any newly seen units
+      Array.from(game.getTeamsUnits(LUnit.TEAM.A).values()).forEach((unit) => {
+        if (!this.unitSprites.has(unit.id)) {
+          addWorkerSprite(this, unit.pos.x, unit.pos.y, unit.team, unit.id).setVisible(
+            false
+          );
+        }
+      });
+
+      const frame = this.createFrame(game, [], roleData);
+      const stats: TurnStats = {
+        citiesOwned: [0, 0],
+        totalFuelGenerated: [0, 0],
+        researchPoints: [0, 0],
+        unitCounts: [game.state.teamStates[0].units.size, game.state.teamStates[1].units.size],
+      };
+      game.cities.forEach((city) => {
+        stats.citiesOwned[city.team] += city.citycells.length;
+      });
+      this.accumulatedStats.push(stats);
+      this.frames.push(frame);
+      this.currentTurn = roleFrame.turn;
+    }
+  }
+
+  /**
    * Creates a snapshot of the game state
    * @param game
    */
@@ -785,10 +1075,14 @@ class MainScene extends Phaser.Scene {
   public currentSelectedTilePos: Position = null;
 
   create(configs: GameCreationConfigs) {
-    this.loadReplayData({
-      ...(configs.replayData as object),
-      roleData: configs.roleData,
-    });
+    if (isRoleOnlyReplayData(configs.replayData)) {
+      this.loadRoleOnlyReplayData(configs.replayData);
+    } else {
+      this.loadReplayData({
+        ...(configs.replayData as object),
+        roleData: configs.roleData,
+      });
+    }
     this.handleTileClicked = configs.handleTileClicked;
     this.handleUnitTracked = configs.handleUnitTracked;
     this.events.emit('created');

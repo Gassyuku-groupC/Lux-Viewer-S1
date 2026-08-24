@@ -1,6 +1,12 @@
 import 'phaser';
 import React, { KeyboardEvent, useEffect, useState, version } from 'react';
-import MainScene, { Frame, FrameTileData, RoleOverlayData } from '../scenes/MainScene';
+import MainScene, {
+  Frame,
+  FrameTileData,
+  RoleOverlayData,
+  RoleOnlyReplayData,
+  isRoleOnlyReplayData,
+} from '../scenes/MainScene';
 import { createGame } from '../game';
 import {
   Button,
@@ -92,6 +98,7 @@ export const GameComponent = () => {
   const [uploading, setUploading] = useState(false);
   const fileInput = React.createRef<HTMLInputElement>();
   const roleFileInput = React.createRef<HTMLInputElement>();
+  const roleOnlyReplayFileInput = React.createRef<HTMLInputElement>();
 
   // If the game changes, put a setup callback to set up controller configs
   useEffect(() => {
@@ -290,6 +297,54 @@ export const GameComponent = () => {
       zoom,
     });
     setGame(newgame);
+  };
+
+  /** load a standalone role-only replay (schema "lux-role-overlay/v1") */
+  const loadRoleOnlyGame = (data: RoleOnlyReplayData) => {
+    if (game) {
+      game.destroy(true, false);
+    }
+    setReady(false);
+    setReplayVersion('');
+    setWarningMessage('');
+    const replayDataWithTeamDetails = {
+      ...data,
+      teamDetails: [
+        { name: 'Team 0', tournamentID: '' },
+        { name: 'Team 1', tournamentID: '' },
+      ],
+    };
+    setReplayData(replayDataWithTeamDetails);
+    setRoleData(null);
+    const newgame = createGame({
+      replayData: data,
+      handleTileClicked,
+      handleUnitTracked,
+      zoom,
+    });
+    setGame(newgame);
+  };
+
+  const handleRoleOnlyReplayUpload = () => {
+    if (!roleOnlyReplayFileInput.current.files.length) {
+      return;
+    }
+    setUseKaggleReplay(false);
+    roleOnlyReplayFileInput.current.files[0]
+      .text()
+      .then(JSON.parse)
+      .then((data) => {
+        if (!isRoleOnlyReplayData(data)) {
+          throw new Error(
+            `File does not match the expected role-only replay schema (lux-role-overlay/v1)`
+          );
+        }
+        loadRoleOnlyGame(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        alert(err);
+      });
   };
 
   const handleRoleUpload = () => {
@@ -495,6 +550,17 @@ export const GameComponent = () => {
               >
                 <span className="upload-text">Upload role JSON</span>
               </Button>
+              <p></p>
+              <Button
+                className="upload-btn"
+                color="secondary"
+                variant="contained"
+                onClick={() => roleOnlyReplayFileInput.current.click()}
+              >
+                <span className="upload-text">
+                  Upload role-only replay (lux-role-overlay/v1)
+                </span>
+              </Button>
               <input
                 accept=".json, .luxr"
                 type="file"
@@ -508,6 +574,13 @@ export const GameComponent = () => {
                 style={{ display: 'none' }}
                 onChange={handleRoleUpload}
                 ref={roleFileInput}
+              />
+              <input
+                accept=".json"
+                type="file"
+                style={{ display: 'none' }}
+                onChange={handleRoleOnlyReplayUpload}
+                ref={roleOnlyReplayFileInput}
               />
             </div>
           </div>
@@ -545,6 +618,23 @@ export const GameComponent = () => {
               style={{ display: 'none' }}
               onChange={handleRoleUpload}
               ref={roleFileInput}
+            />
+            <Button
+              className="upload-btn"
+              color="secondary"
+              variant="contained"
+              onClick={() => roleOnlyReplayFileInput.current.click()}
+            >
+              <span className="upload-text">
+                Upload role-only replay (lux-role-overlay/v1)
+              </span>
+            </Button>
+            <input
+              accept=".json"
+              type="file"
+              style={{ display: 'none' }}
+              onChange={handleRoleOnlyReplayUpload}
+              ref={roleOnlyReplayFileInput}
             />
             <Controller
               turn={turn}
