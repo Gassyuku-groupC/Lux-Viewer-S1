@@ -1,7 +1,7 @@
 {
-  "name": "lux-viewer-2021",
+  "name": "role-colored-lux-viewer",
   "version": "3.1.0",
-  "description": "",
+  "description": "Lux AI 2021 replay viewer with per-turn unit and city role colors",
   "author": "Lux AI challenge",
   "main": "index.js",
   "scripts": {

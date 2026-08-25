@@ -2,60 +2,35 @@ import MainScene, { FrameSingleCityTileData } from '../MainScene';
 import {
   getDepthByPos,
   getNightTransitionTween,
-  hashMapCoords,
   mapPosToIsometricPixels,
 } from '../utils';
-import seedrandom from 'seedrandom';
-import { Position } from '@lux-ai/2021-challenge/lib/es6';
 
 export const addCityTile = (
   scene: MainScene,
   data: FrameSingleCityTileData,
   tilesWithUnits: Set<number>,
-  turn = 0
+  turn = 0,
+  roleAssetKey?: string
 ) => {
   const p = mapPosToIsometricPixels(data.pos, {
     scale: scene.overallScale,
     width: scene.mapWidth,
     height: scene.mapHeight,
   });
-  let cityTileType = '';
-  let cityTileNightType = '';
-  let variant = '0';
+  const variant = '0';
+  const cityTileType = 'city' + data.team + variant;
 
-  if (data.team === 0) {
-    if (data.pos.x > 0 && data.pos.x < 2) {
-      cityTileType = 'city00-hub';
-      cityTileNightType = 'city00night-hub';
-    } else if (data.pos.x > 2 && data.pos.x < 4) {
-      cityTileType = 'city00-fuel';
-      cityTileNightType = 'city00night-fuel';
-    } else {
-      cityTileType = 'city00';
-      cityTileNightType = 'city00night';
+  let dayTextureKey = cityTileType;
+  let nightTextureKey = cityTileType + 'night';
+  if (roleAssetKey) {
+    const roleDayKey = `${cityTileType}-${roleAssetKey}`;
+    const roleNightKey = `${cityTileType}night-${roleAssetKey}`;
+    if (scene.textures.exists(roleDayKey)) {
+      dayTextureKey = roleDayKey;
     }
-  } else {
-    cityTileType = 'city' + data.team;
-    const s = seedrandom('' + data.pos.x * 10e3 + data.pos.y);
-    const rngp = s();
-    if (rngp < 0.125) {
-      variant = '2';
-    } else if (rngp < 0.5) {
-      variant = '1';
-    } else if (rngp < 0.625) {
-      variant = '3';
+    if (scene.textures.exists(roleNightKey)) {
+      nightTextureKey = roleNightKey;
     }
-    cityTileType += variant;
-    // make tile transparent if there's a unit behind it and its a tall building (type 2 or 3)
-    if (
-      (variant === '2' || variant === '3') &&
-      tilesWithUnits.has(
-        hashMapCoords(new Position(data.pos.x - 1, data.pos.y - 1))
-      )
-    ) {
-      cityTileType += 't';
-    }
-    cityTileNightType = cityTileType + 'night';
   }
 
   // handle determining alpha for night version
@@ -63,36 +38,25 @@ export const addCityTile = (
   let [startAlpha, endAlpha] = scene.determineNightTransitionAlphas(turn);
 
   const img = scene.add
-    .image(p[0], p[1], cityTileType)
+    .image(p[0], p[1], dayTextureKey)
     .setDepth(getDepthByPos(data.pos))
     .setScale(scene.defaultScales.city * scene.overallScale);
   let ny = img.y;
   let nx = img.x;
   const img_overlay = scene.add
-    .image(p[0], p[1], cityTileNightType)
+    .image(p[0], p[1], nightTextureKey)
     .setDepth(getDepthByPos(data.pos) + 1e-1)
     .setScale(scene.defaultScales.city * scene.overallScale)
     .setAlpha(startAlpha);
   scene.tweens.add(getNightTransitionTween(img_overlay, scene.speed, endAlpha));
 
-  switch (data.team + variant) {
-    case '00':
-    case '01':
+  switch (data.team) {
+    case 0:
       ny = img.y - 80 * scene.defaultScales.city * scene.overallScale;
       nx = img.x + 10 * scene.defaultScales.city * scene.overallScale;
       break;
-    case '02':
-    case '03':
-      ny = img.y - 120 * scene.defaultScales.city * scene.overallScale;
-      nx = img.x + 10 * scene.defaultScales.city * scene.overallScale;
-      break;
-    case '10':
-    case '11':
+    case 1:
       ny = img.y - 100 * scene.defaultScales.city * scene.overallScale;
-      break;
-    case '12':
-    case '13':
-      ny = img.y - 140 * scene.defaultScales.city * scene.overallScale;
       break;
   }
   img.setY(ny);
