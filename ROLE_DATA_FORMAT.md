@@ -36,8 +36,8 @@ A role sidecar uses the following top-level structure:
 }
 ```
 
-`turn`, entity `id`, and `role` are required for coloring. `cooldown_until` and
-`reason` are retained for analysis but are not required by the renderer.
+`turn`, entity `id`, and `role` are required for asset selection. `cooldown_until`
+and `reason` are retained for analysis but are not required by the renderer.
 
 ## Embedded Replay Fields
 
@@ -73,4 +73,5 @@ City roles:
 - `ManufacturingPoint`
 - `SacrificialDecay`
 
-Unknown roles receive no tint until a color is added to `src/roleColors.ts`.
+Unknown roles receive no asset swap until a mapping is added to
+`src/roleColors.ts` and the corresponding sprite exists under `assets/sprites/`.

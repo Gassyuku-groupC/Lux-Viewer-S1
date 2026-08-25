@@ -7,8 +7,7 @@ It is based on the Lux AI Season 1 viewer and the Group C local viewer work.
 ## Features
 
 - Preserves the original Lux unit, city, map, animation, and replay controls.
-- Colors units and city tiles from per-turn role assignments.
-- Shows a collapsible role legend only when role data is present.
+- Swaps unit and city tile artwork based on per-turn role assignments.
 - Supports ordinary stateful Lux replays without changing their display.
 - Includes a generator that embeds a `*.roles.json` sidecar into a replay.
 
@@ -50,14 +49,15 @@ unchanged. Upload the generated `match.role-colored.json` to the viewer.
 See [ROLE_DATA_FORMAT.md](./ROLE_DATA_FORMAT.md) for the sidecar schema and role
 names.
 
-## Role Colors
+## Role Assets
 
-The current legend includes worker roles `Harvester`, `Builder`, `Attacker`, and
-`Firefighter`, plus city roles `FuelDepot`, `FuelStation`, `ResearchStation`,
-`ManufacturingPoint`, and `SacrificialDecay`.
+Worker roles `Harvester`, `Builder`, `Attacker`, and `Firefighter` swap in a
+role-specific worker sprite (team 0 only). City roles `FuelDepot` and
+`FuelStation` both use the `fuel` city sprite; `ResearchStation` uses
+`reserach`; `ManufacturingPoint` uses `manufacturing`; `SacrificialDecay` uses
+`sacrificial` (team 0, variant 0 only, day and night).
 
-Color definitions are centralized in `src/roleColors.ts` and shared by the map
-renderer and legend.
+Role-to-asset-key mappings are centralized in `src/roleColors.ts`.
 
 ## Build Output
 

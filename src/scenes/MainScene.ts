@@ -25,7 +25,7 @@ import {
 import { generateClouds } from './constructors/clouds';
 import { addCartSprite, addWorkerSprite } from './constructors/units';
 import { addCityTile } from './constructors/city';
-import { ROLE_COLORS } from '../roleColors';
+import { UNIT_ROLE_ASSET_KEYS, CITY_ROLE_ASSET_KEYS } from '../roleColors';
 import { addResourceTile } from './constructors/resource';
 import { addNormalFloorTile } from './constructors/floors';
 
@@ -159,7 +159,11 @@ class MainScene extends Phaser.Scene {
   // All unit sprites rendered throughout match
   unitSprites: Map<
     string,
-    { sprite: Phaser.GameObjects.Sprite; originalPosition: Position }
+    {
+      sprite: Phaser.GameObjects.Sprite;
+      originalPosition: Position;
+      baseTextureKey: string;
+    }
   > = new Map();
 
   cityTilemapTiles: Map<string, Phaser.Tilemaps.Tile> = new Map();
@@ -172,10 +176,12 @@ class MainScene extends Phaser.Scene {
 
   roleFrames: Map<number, any> = new Map();
 
-  roleColor(turn: number, kind: 'units' | 'cities', id: string): number {
+  roleAssetKey(turn: number, kind: 'units' | 'cities', id: string): string {
     const entries = this.roleFrames.get(turn)?.[kind] || [];
     const entry = entries.find((value) => value.id === id);
-    return entry ? ROLE_COLORS[entry.role] : undefined;
+    if (!entry) return undefined;
+    const map = kind === 'units' ? UNIT_ROLE_ASSET_KEYS : CITY_ROLE_ASSET_KEYS;
+    return map[entry.role];
   }
 
   /** To allow dimensions to run a match */
@@ -270,6 +276,12 @@ class MainScene extends Phaser.Scene {
     this.load.image('worker-0-outline', `${base}/sprites/worker0w-outline.svg`);
     this.load.image('worker-1', `${base}/sprites/worker1w.svg`);
     this.load.image('worker-1-outline', `${base}/sprites/worker1w-outline.svg`);
+    Object.values(UNIT_ROLE_ASSET_KEYS).forEach((roleKey) => {
+      this.load.image(
+        `worker-0-${roleKey}`,
+        `${base}/sprites/worker0w-${roleKey}.svg`
+      );
+    });
     this.load.image('cart-0', `${base}/sprites/carts/cart0w.svg`);
     this.load.image('cart-1', `${base}/sprites/carts/cart1w.svg`);
     this.load.image(
@@ -326,6 +338,16 @@ class MainScene extends Phaser.Scene {
         );
       }
     }
+    Object.values(CITY_ROLE_ASSET_KEYS).forEach((roleKey) => {
+      this.load.svg(
+        `city00-${roleKey}`,
+        `${base}/sprites/cities/city00-${roleKey}.svg`
+      );
+      this.load.svg(
+        `city00night-${roleKey}`,
+        `${base}/sprites/cities/city00night-${roleKey}.svg`
+      );
+    });
     this.load.image('coal', `${base}/sprites/coal.svg`);
     this.load.svg('uranium', `${base}/sprites/uranium.svg`);
     this.load.image('coal-night', `${base}/sprites/coalnight.svg`);
@@ -343,11 +365,10 @@ class MainScene extends Phaser.Scene {
    */
   trackUnit(id: string) {
     this.currentTrackedUnitID = id;
-    const { sprite } = this.unitSprites.get(id);
-    const keyInfo = sprite.texture.key.split('-');
-    if (keyInfo.length <= 2) {
-      const newkey = keyInfo.join('-') + '-outline';
-      sprite.setTexture(newkey);
+    const { sprite, baseTextureKey } = this.unitSprites.get(id);
+    const outlineKey = `${baseTextureKey}-outline`;
+    if (sprite.texture.key === baseTextureKey && this.textures.exists(outlineKey)) {
+      sprite.setTexture(outlineKey);
     }
     this.toggleOutlineClickedTile();
     this.handleUnitTracked(id);
@@ -358,10 +379,11 @@ class MainScene extends Phaser.Scene {
    */
   untrackUnit(trackTileUnderneath = false) {
     if (this.currentTrackedUnitID) {
-      const { sprite } = this.unitSprites.get(this.currentTrackedUnitID);
-      const keyInfo = sprite.texture.key.split('-');
-      if (keyInfo.length > 2) {
-        sprite.setTexture(keyInfo.slice(0, 2).join('-'));
+      const { sprite, baseTextureKey } = this.unitSprites.get(
+        this.currentTrackedUnitID
+      );
+      if (sprite.texture.key === `${baseTextureKey}-outline`) {
+        sprite.setTexture(baseTextureKey);
       }
       this.currentTrackedUnitID = null;
       this.handleUnitTracked(null);
@@ -920,10 +942,28 @@ class MainScene extends Phaser.Scene {
         // if this unit is being tracked, track it by clicking its tile and
         this.onTileClicked(data.pos);
       }
-      const { sprite } = this.unitSprites.get(id);
+      const unitSpriteInfo = this.unitSprites.get(id);
+      const { sprite } = unitSpriteInfo;
 
-      const roleColor = this.roleColor(turn, 'units', id);
-      roleColor === undefined ? sprite.clearTint() : sprite.setTint(roleColor);
+      const roleAssetKey = this.roleAssetKey(turn, 'units', id);
+      const newBaseTextureKey =
+        roleAssetKey && data.type === LUnit.Type.WORKER
+          ? `worker-${data.team}-${roleAssetKey}`
+          : `worker-${data.team}`;
+      if (
+        data.type === LUnit.Type.WORKER &&
+        this.textures.exists(newBaseTextureKey) &&
+        unitSpriteInfo.baseTextureKey !== newBaseTextureKey
+      ) {
+        const isOutlined = sprite.texture.key.endsWith('-outline');
+        const outlineKey = `${newBaseTextureKey}-outline`;
+        unitSpriteInfo.baseTextureKey = newBaseTextureKey;
+        sprite.setTexture(
+          isOutlined && this.textures.exists(outlineKey)
+            ? outlineKey
+            : newBaseTextureKey
+        );
+      }
 
       sprite.setVisible(true);
       const p = mapPosToIsometricPixels(data.pos, {
@@ -979,12 +1019,14 @@ class MainScene extends Phaser.Scene {
     this.graphics.lineStyle(3 * this.overallScale, 0x323d34, 1);
     this.graphics.fillStyle(0xe7ded1, 1);
     f.cityTileData.forEach((data) => {
-      const [img, img_overlay] = addCityTile(this, data, tilesWithUnits, turn);
-      const roleColor = this.roleColor(turn, 'cities', data.cityid);
-      if (roleColor !== undefined) {
-        img.setTint(roleColor);
-        img_overlay.setTint(roleColor);
-      }
+      const roleAssetKey = this.roleAssetKey(turn, 'cities', data.cityid);
+      const [img, img_overlay] = addCityTile(
+        this,
+        data,
+        tilesWithUnits,
+        turn,
+        roleAssetKey
+      );
       this.currentRenderedFramesImgs.push(img);
       this.currentRenderedFramesImgs.push(img_overlay);
       const hash = hashMapCoords(data.pos);

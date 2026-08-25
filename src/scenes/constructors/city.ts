@@ -12,7 +12,8 @@ export const addCityTile = (
   scene: MainScene,
   data: FrameSingleCityTileData,
   tilesWithUnits: Set<number>,
-  turn = 0
+  turn = 0,
+  roleAssetKey?: string
 ) => {
   const p = mapPosToIsometricPixels(data.pos, {
     scale: scene.overallScale,
@@ -40,18 +41,31 @@ export const addCityTile = (
     cityTileType += 't';
   }
 
+  let dayTextureKey = cityTileType;
+  let nightTextureKey = cityTileType + 'night';
+  if (roleAssetKey) {
+    const roleDayKey = `${cityTileType}-${roleAssetKey}`;
+    const roleNightKey = `${cityTileType}night-${roleAssetKey}`;
+    if (scene.textures.exists(roleDayKey)) {
+      dayTextureKey = roleDayKey;
+    }
+    if (scene.textures.exists(roleNightKey)) {
+      nightTextureKey = roleNightKey;
+    }
+  }
+
   // handle determining alpha for night version
 
   let [startAlpha, endAlpha] = scene.determineNightTransitionAlphas(turn);
 
   const img = scene.add
-    .image(p[0], p[1], cityTileType)
+    .image(p[0], p[1], dayTextureKey)
     .setDepth(getDepthByPos(data.pos))
     .setScale(scene.defaultScales.city * scene.overallScale);
   let ny = img.y;
   let nx = img.x;
   const img_overlay = scene.add
-    .image(p[0], p[1], cityTileType + 'night')
+    .image(p[0], p[1], nightTextureKey)
     .setDepth(getDepthByPos(data.pos) + 1e-1)
     .setScale(scene.defaultScales.city * scene.overallScale)
     .setAlpha(startAlpha);
