@@ -2,11 +2,8 @@ import MainScene, { FrameSingleCityTileData } from '../MainScene';
 import {
   getDepthByPos,
   getNightTransitionTween,
-  hashMapCoords,
   mapPosToIsometricPixels,
 } from '../utils';
-import seedrandom from 'seedrandom';
-import { Position } from '@lux-ai/2021-challenge/lib/es6';
 
 export const addCityTile = (
   scene: MainScene,
@@ -20,26 +17,8 @@ export const addCityTile = (
     width: scene.mapWidth,
     height: scene.mapHeight,
   });
-  let cityTileType = 'city' + data.team;
-  let variant = '0';
-  const s = seedrandom('' + data.pos.x * 10e3 + data.pos.y);
-  const rngp = s();
-  if (rngp < 0.125) {
-    variant = '2';
-  } else if (rngp < 0.5) {
-    variant = '1';
-  } else if (rngp < 0.625) {
-    variant = '3';
-  }
-  cityTileType += variant;
-  if (
-    (variant === '2' || variant === '3') &&
-    tilesWithUnits.has(
-      hashMapCoords(new Position(data.pos.x - 1, data.pos.y - 1))
-    )
-  ) {
-    cityTileType += 't';
-  }
+  const variant = '0';
+  const cityTileType = 'city' + data.team + variant;
 
   let dayTextureKey = cityTileType;
   let nightTextureKey = cityTileType + 'night';
@@ -71,24 +50,13 @@ export const addCityTile = (
     .setAlpha(startAlpha);
   scene.tweens.add(getNightTransitionTween(img_overlay, scene.speed, endAlpha));
 
-  switch (data.team + variant) {
-    case '00':
-    case '01':
+  switch (data.team) {
+    case 0:
       ny = img.y - 80 * scene.defaultScales.city * scene.overallScale;
       nx = img.x + 10 * scene.defaultScales.city * scene.overallScale;
       break;
-    case '02':
-    case '03':
-      ny = img.y - 120 * scene.defaultScales.city * scene.overallScale;
-      nx = img.x + 10 * scene.defaultScales.city * scene.overallScale;
-      break;
-    case '10':
-    case '11':
+    case 1:
       ny = img.y - 100 * scene.defaultScales.city * scene.overallScale;
-      break;
-    case '12':
-    case '13':
-      ny = img.y - 140 * scene.defaultScales.city * scene.overallScale;
       break;
   }
   img.setY(ny);
