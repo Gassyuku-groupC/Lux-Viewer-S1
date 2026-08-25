@@ -1,4 +1,9 @@
 node_modules
 dist
+__pycache__/
+*.py[cod]
 .DS_STORE
 .vscode
+dist-pub
+dist.zip
+dist-archive
